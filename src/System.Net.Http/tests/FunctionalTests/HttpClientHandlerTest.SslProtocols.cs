@@ -19,12 +19,12 @@ namespace System.Net.Http.Functional.Tests
         {
             using (var handler = new HttpClientHandler())
             {
-                const SslProtocols expectedDefault = SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12;
-                Assert.Equal(expectedDefault, handler.SslProtocols);
+                Assert.Equal(SslProtocols.None, handler.SslProtocols);
             }
         }
 
         [Theory]
+        [InlineData(SslProtocols.None)]
         [InlineData(SslProtocols.Tls)]
         [InlineData(SslProtocols.Tls11)]
         [InlineData(SslProtocols.Tls12)]
@@ -42,14 +42,14 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [ConditionalFact(nameof(BackendSupportsSslConfiguration))]
-        public async Task SetProtcols_AfterRequest_ThrowsException()
+        public async Task SetProtocols_AfterRequest_ThrowsException()
         {
             using (var handler = new HttpClientHandler() { ServerCertificateCustomValidationCallback = LoopbackServer.AllowAllCertificates })
             using (var client = new HttpClient(handler))
             {
                 await LoopbackServer.CreateServerAsync(async (server, url) =>
                 {
-                    await WhenAllCompletedOrAnyFailed(
+                    await TestHelper.WhenAllCompletedOrAnyFailed(
                         LoopbackServer.ReadRequestAndSendResponseAsync(server),
                         client.GetAsync(url));
                 });
@@ -58,7 +58,6 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Theory]
-        [InlineData(SslProtocols.None)]
         [InlineData(~SslProtocols.None)]
 #pragma warning disable 0618 // obsolete warning
         [InlineData(SslProtocols.Ssl2)]
@@ -87,7 +86,7 @@ namespace System.Net.Http.Functional.Tests
                 var options = new LoopbackServer.Options { UseSsl = true, SslProtocols = acceptedProtocol };
                 await LoopbackServer.CreateServerAsync(async (server, url) =>
                 {
-                    await WhenAllCompletedOrAnyFailed(
+                    await TestHelper.WhenAllCompletedOrAnyFailed(
                         LoopbackServer.ReadRequestAndSendResponseAsync(server, options: options),
                         client.GetAsync(url));
                 }, options);
@@ -107,7 +106,7 @@ namespace System.Net.Http.Functional.Tests
                 var options = new LoopbackServer.Options { UseSsl = true, SslProtocols = acceptedProtocol };
                 await LoopbackServer.CreateServerAsync(async (server, url) =>
                 {
-                    await WhenAllCompletedOrAnyFailed(
+                    await TestHelper.WhenAllCompletedOrAnyFailed(
                         Assert.ThrowsAsync(exceptedServerException, () => LoopbackServer.ReadRequestAndSendResponseAsync(server, options: options)),
                         Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(url)));
                 }, options);
@@ -127,7 +126,7 @@ namespace System.Net.Http.Functional.Tests
                     options.SslProtocols = SslProtocols.Tls;
                     await LoopbackServer.CreateServerAsync(async (server, url) =>
                     {
-                        await WhenAllCompletedOrAnyFailed(
+                        await TestHelper.WhenAllCompletedOrAnyFailed(
                             Assert.ThrowsAsync<IOException>(() => LoopbackServer.ReadRequestAndSendResponseAsync(server, options: options)),
                             Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(url)));
                     }, options);
@@ -137,7 +136,7 @@ namespace System.Net.Http.Functional.Tests
                         options.SslProtocols = prot;
                         await LoopbackServer.CreateServerAsync(async (server, url) =>
                         {
-                            await WhenAllCompletedOrAnyFailed(
+                            await TestHelper.WhenAllCompletedOrAnyFailed(
                                 LoopbackServer.ReadRequestAndSendResponseAsync(server, options: options),
                                 client.GetAsync(url));
                         }, options);
@@ -148,24 +147,6 @@ namespace System.Net.Http.Functional.Tests
                     await Assert.ThrowsAnyAsync<NotSupportedException>(() => client.GetAsync($"http://{Guid.NewGuid().ToString()}/"));
                 }
             }
-        }
-
-        private static Task WhenAllCompletedOrAnyFailed(params Task[] tasks)
-        {
-            var tcs = new TaskCompletionSource<bool>();
-
-            int remaining = tasks.Length;
-            foreach (var task in tasks)
-            {
-                task.ContinueWith(t =>
-                {
-                    if (t.IsFaulted) tcs.SetException(t.Exception.InnerExceptions);
-                    else if (t.IsCanceled) tcs.SetCanceled();
-                    else if (Interlocked.Decrement(ref remaining) == 0) tcs.SetResult(true);
-                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-            }
-
-            return tcs.Task;
         }
 
         private static bool BackendSupportsSslConfiguration =>

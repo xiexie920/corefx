@@ -5,6 +5,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
+using System.Net.Test.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -13,7 +14,7 @@ namespace System.Net.Http.Functional.Tests
 {
     public class HttpClientMiniStress
     {
-        private static bool HttpStressEnabled => Environment.GetEnvironmentVariable("HTTP_STRESS") == "1";
+        private static bool HttpStressEnabled => TestSettings.Http.StressEnabled;
 
         [ConditionalTheory(nameof(HttpStressEnabled))]
         [MemberData(nameof(GetStressOptions))]
@@ -124,7 +125,6 @@ namespace System.Net.Http.Functional.Tests
                     while (!string.IsNullOrEmpty(reader.ReadLine())) ;
 
                     writer.Write(responseText);
-                    writer.Flush();
                     s.Shutdown(SocketShutdown.Send);
 
                     return Task.CompletedTask;
@@ -146,7 +146,6 @@ namespace System.Net.Http.Functional.Tests
                     while (!string.IsNullOrEmpty(await reader.ReadLineAsync().ConfigureAwait(false))) ;
 
                     await writer.WriteAsync(responseText).ConfigureAwait(false);
-                    await writer.FlushAsync().ConfigureAwait(false);
                     s.Shutdown(SocketShutdown.Send);
                 });
 
@@ -175,7 +174,6 @@ namespace System.Net.Http.Functional.Tests
                     for (int i = 0; i < numBytes; i++) Assert.NotEqual(-1, reader.Read());
 
                     await writer.WriteAsync(responseText).ConfigureAwait(false);
-                    await writer.FlushAsync().ConfigureAwait(false);
                     s.Shutdown(SocketShutdown.Send);
                 });
 
@@ -197,7 +195,6 @@ namespace System.Net.Http.Functional.Tests
                     {
                         while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) ;
                         await writer.WriteAsync(CreateResponse(new string('a', 32 * 1024)));
-                        await writer.FlushAsync();
 
                         WeakReference wr = wrt.GetAwaiter().GetResult();
                         Assert.True(SpinWait.SpinUntil(() =>
